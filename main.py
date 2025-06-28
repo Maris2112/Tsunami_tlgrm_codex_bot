@@ -60,12 +60,14 @@ def ask_openrouter(question, history=[]):
             data=json.dumps(payload)  # ⚠️ важно: data=, не json=
         )
 
+        # 🔍 Печать текста ответа
         print("[DEBUG] OpenRouter response text:", response.text)
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
 
     except Exception as e:
         print("[ERROR] OpenRouter call failed:", e)
+        traceback.print_exc()
         return "⚠️ Ошибка ИИ. Попробуй позже."
 
 
@@ -116,4 +118,5 @@ def root():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
 
