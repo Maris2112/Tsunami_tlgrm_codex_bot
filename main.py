@@ -24,8 +24,6 @@ conversation_memory = {}
 # === CALL OPENROUTER ===
 import os  # обязательно вверху файла, если не было
 
-import os  # обязательно вверху файла, если не было
-
 def ask_openrouter(question, history=[]):
     try:
         tz = pytz.timezone("Asia/Almaty")
@@ -33,6 +31,8 @@ def ask_openrouter(question, history=[]):
         full_question = f"[{now}] {question}"
 
         OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+        print("[DEBUG] KEY:", repr(OPENROUTER_API_KEY))  # Печать ключа в raw-виде
+
         OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-flash-1.5")  # запасной дефолт
 
         if not OPENROUTER_API_KEY:
