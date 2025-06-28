@@ -15,7 +15,6 @@ OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-flash-1.5")
 
 # === CONFIG ===
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 SYSTEM_PROMPT_PATH = os.environ.get("SYSTEM_PROMPT_PATH", "system_prompt.txt")
 
 with open(SYSTEM_PROMPT_PATH, "r", encoding="utf-8") as f:
@@ -27,8 +26,6 @@ app = Flask(__name__)
 conversation_memory = {}
 
 # === CALL OPENROUTER ===
-import os  # обязательно вверху файла, если не было
-
 def ask_openrouter(question, history=[]):
     try:
         tz = pytz.timezone("Asia/Almaty")
@@ -36,9 +33,9 @@ def ask_openrouter(question, history=[]):
         full_question = f"[{now}] {question}"
 
         OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-        print("[DEBUG] KEY:", repr(OPENROUTER_API_KEY))  # Печать ключа в raw-виде
+        print("[DEBUG] KEY:", repr(OPENROUTER_API_KEY))
 
-        OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-flash-1.5")  # запасной дефолт
+        OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-flash-1.5")
 
         if not OPENROUTER_API_KEY:
             raise ValueError("❌ Переменная окружения OPENROUTER_API_KEY не задана.")
@@ -46,22 +43,25 @@ def ask_openrouter(question, history=[]):
         headers = {
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
+            "HTTP-Referer": "https://tsunami-whatsapp.up.railway.app"  # ✅ Railway-домен
         }
+
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             *history,
             {"role": "user", "content": full_question},
         ]
+
         payload = {
             "model": OPENROUTER_MODEL,
             "messages": messages
         }
 
-        import json  # если выше не подключён
+        import json
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers=headers,
-            json=payload  # ✅ исправлено здесь
+            json=payload
         )
 
         print("[DEBUG] OpenRouter response text:", response.text)
@@ -119,4 +119,3 @@ def root():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-
