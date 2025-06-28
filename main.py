@@ -13,8 +13,6 @@ load_dotenv()
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 SYSTEM_PROMPT_PATH = os.environ.get("SYSTEM_PROMPT_PATH", "system_prompt.txt")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-flash-1.5")
-
-# ✅ Прямо в коде зашит ключ (для стабильности на проде)
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 
 with open(SYSTEM_PROMPT_PATH, "r", encoding="utf-8") as f:
@@ -24,6 +22,7 @@ app = Flask(__name__)
 
 # === MEMORY ===
 conversation_memory = {}
+processed_messages = set()  # 🛡️ Обработанные WhatsApp ID
 
 # === CALL OPENROUTER ===
 def ask_openrouter(question, history=[]):
@@ -35,8 +34,8 @@ def ask_openrouter(question, history=[]):
         headers = {
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://tsunami-whatsapp.up.railway.app",  # ✅ рейтинг
-            "X-Title": "Tsunami Telegram Bot"  # ✅ отображение на openrouter.ai
+            "HTTP-Referer": "https://tsunami-whatsapp.up.railway.app",
+            "X-Title": "Tsunami Telegram Bot"
         }
 
         print("[DEBUG] Headers sent to OpenRouter:", headers)
@@ -56,7 +55,7 @@ def ask_openrouter(question, history=[]):
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers=headers,
-            data=json.dumps(payload)  # ⚠️ Важно! Используем data=
+            data=json.dumps(payload)
         )
 
         print("[DEBUG] OpenRouter response text:", response.text)
@@ -108,12 +107,55 @@ def telegram_webhook():
         traceback.print_exc()
         return jsonify({"status": "fail"}), 500
 
+# === WHATSAPP WEBHOOK ===
+@app.route("/whatsapp", methods=["POST"])
+def whatsapp_webhook():
+    try:
+        data = request.get_json(force=True)
+        print("[WA WEBHOOK]", data)
+
+        message_id = data.get("idMessage")
+        if message_id in processed_messages:
+            print(f"[DUPLICATE] Уже обработано: {message_id}")
+            return jsonify({"status": "duplicate"}), 200
+        processed_messages.add(message_id)
+
+        text = data.get("messageData", {}).get("textMessageData", {}).get("text")
+        sender_id = data.get("senderData", {}).get("chatId")
+
+        if not text or not sender_id:
+            print("[SKIP] Пустое сообщение от WhatsApp.")
+            return jsonify({"status": "no-message"}), 200
+
+        history = conversation_memory.get(sender_id, [])[-6:]
+        reply = ask_openrouter(text, history)
+
+        history.append({"role": "user", "content": text})
+        history.append({"role": "assistant", "content": reply})
+        conversation_memory[sender_id] = history
+
+        # ✅ Отправка через Green API
+        green_url = f"{os.environ.get('GREENAPI_API_URL')}/waInstance{os.environ.get('GREENAPI_INSTANCE_ID')}/sendMessage/{os.environ.get('GREENAPI_TOKEN')}"
+        payload = {
+            "chatId": sender_id,
+            "message": reply
+        }
+        response = requests.post(green_url, json=payload)
+        print("[SEND WA]", response.status_code, response.text)
+
+        return jsonify({"status": "ok"}), 200
+
+    except Exception:
+        traceback.print_exc()
+        return jsonify({"status": "fail"}), 500
+
 # === HEALTHCHECK ===
 @app.route("/", methods=["GET"])
 def root():
-    return "TsunamiBot для Telegram + OpenRouter запущен ✅"
+    return "TsunamiBot WhatsApp + Telegram запущен ✅"
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))  # Railway сам подставит правильный порт
+    port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
+
 
