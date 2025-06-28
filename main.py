@@ -22,11 +22,21 @@ app = Flask(__name__)
 conversation_memory = {}
 
 # === CALL OPENROUTER ===
+import os  # обязательно вверху файла, если не было
+
+import os  # обязательно вверху файла, если не было
+
 def ask_openrouter(question, history=[]):
     try:
         tz = pytz.timezone("Asia/Almaty")
         now = datetime.now(tz).strftime("%A, %d %B %Y, %H:%M")
         full_question = f"[{now}] {question}"
+
+        OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+        OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-flash-1.5")  # запасной дефолт
+
+        if not OPENROUTER_API_KEY:
+            raise ValueError("❌ Переменная окружения OPENROUTER_API_KEY не задана.")
 
         headers = {
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -38,7 +48,7 @@ def ask_openrouter(question, history=[]):
             {"role": "user", "content": full_question},
         ]
         payload = {
-            "model": "google/gemini-flash-1.5",
+            "model": OPENROUTER_MODEL,
             "messages": messages
         }
         response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
