@@ -6,7 +6,12 @@ from datetime import datetime
 import pytz
 from dotenv import load_dotenv
 
+# ✅ Загрузка переменных окружения из файла .env
 load_dotenv()
+
+# ✅ Получение ключей из окружения
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-flash-1.5")
 
 # === CONFIG ===
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
