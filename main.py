@@ -9,11 +9,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # === CONFIG ===
-GREENAPI_INSTANCE_ID = os.environ.get("GREENAPI_INSTANCE_ID")
-GREENAPI_TOKEN = os.environ.get("GREENAPI_TOKEN")
-GREENAPI_API_URL = os.environ.get("GREENAPI_API_URL")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
-BOT_CHAT_ID = os.environ.get("BOT_ID")
 SYSTEM_PROMPT_PATH = os.environ.get("SYSTEM_PROMPT_PATH", "system_prompt.txt")
 
 with open(SYSTEM_PROMPT_PATH, "r", encoding="utf-8") as f:
@@ -51,48 +48,40 @@ def ask_openrouter(question, history=[]):
         print("[ERROR] OpenRouter call failed:", e)
         return "⚠️ Ошибка ИИ. Попробуй позже."
 
-# === SEND MESSAGE ===
-def send_whatsapp_message(chat_id, text):
+# === SEND TELEGRAM ===
+def send_telegram_message(chat_id, text):
     try:
-        url = f"{GREENAPI_API_URL}/waInstance{GREENAPI_INSTANCE_ID}/sendMessage/{GREENAPI_TOKEN}"
-        payload = {"chatId": chat_id, "message": text}
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = {"chat_id": chat_id, "text": text}
         response = requests.post(url, json=payload)
-        print("[SEND]", response.status_code, response.text)
+        print("[SEND TG]", response.status_code, response.text)
     except Exception:
-        print("[ERROR] WhatsApp message failed:")
+        print("[ERROR] Telegram message failed:")
         traceback.print_exc()
 
-# === WEBHOOK ===
+# === TELEGRAM WEBHOOK ===
 @app.route("/webhook", methods=["POST"])
-def whatsapp_webhook():
+def telegram_webhook():
     try:
         data = request.get_json(force=True)
-        print("[WEBHOOK]", data)
+        print("[TG WEBHOOK]", data)
 
-        sender_id = data.get("senderData", {}).get("chatId")
-        if sender_id == BOT_CHAT_ID:
-            print("[SKIP] Self-message detected.")
-            return jsonify({"status": "self-message"}), 200
+        message = data.get("message", {})
+        text = message.get("text")
+        sender_id = message.get("chat", {}).get("id")
 
-        message_data = data.get("messageData", {})
-        message = None
-        if "textMessageData" in message_data:
-            message = message_data["textMessageData"].get("textMessage")
-        elif "extendedTextMessageData" in message_data:
-            message = message_data["extendedTextMessageData"].get("text")
-
-        if not message:
-            print("[SKIP] No valid message")
+        if not text or not sender_id:
+            print("[SKIP] Empty Telegram message.")
             return jsonify({"status": "no-message"}), 200
 
         history = conversation_memory.get(sender_id, [])[-6:]  # до 3 пар (вопрос+ответ)
-        reply = ask_openrouter(message, history)
+        reply = ask_openrouter(text, history)
 
-        history.append({"role": "user", "content": message})
+        history.append({"role": "user", "content": text})
         history.append({"role": "assistant", "content": reply})
         conversation_memory[sender_id] = history
 
-        send_whatsapp_message(sender_id, reply)
+        send_telegram_message(sender_id, reply)
         return jsonify({"status": "ok"}), 200
 
     except Exception:
@@ -102,7 +91,8 @@ def whatsapp_webhook():
 # === HEALTHCHECK ===
 @app.route("/", methods=["GET"])
 def root():
-    return "TsunamiBot with OpenRouter is running ✅"
+    return "TsunamiBot for Telegram + OpenRouter is running ✅"
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
