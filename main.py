@@ -26,24 +26,22 @@ app = Flask(__name__)
 conversation_memory = {}
 
 # === CALL OPENROUTER ===
+# === CALL OPENROUTER ===
 def ask_openrouter(question, history=[]):
     try:
         tz = pytz.timezone("Asia/Almaty")
         now = datetime.now(tz).strftime("%A, %d %B %Y, %H:%M")
         full_question = f"[{now}] {question}"
 
-        OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-        print("[DEBUG] KEY:", repr(OPENROUTER_API_KEY))
-
+        # ✅ Ключ зашит напрямую
+        OPENROUTER_API_KEY = "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"
         OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-flash-1.5")
-
-        if not OPENROUTER_API_KEY:
-            raise ValueError("❌ Переменная окружения OPENROUTER_API_KEY не задана.")
 
         headers = {
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://tsunami-whatsapp.up.railway.app"  # ✅ Railway-домен
+            "HTTP-Referer": "https://tsunami-whatsapp.up.railway.app",  # ✅ для рейтинга
+            "X-Title": "Tsunami Telegram Bot"  # ✅ для рейтинга на openrouter.ai
         }
 
         messages = [
@@ -61,7 +59,7 @@ def ask_openrouter(question, history=[]):
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers=headers,
-            json=payload
+            data=json.dumps(payload)  # ✅ ключевой фикс
         )
 
         print("[DEBUG] OpenRouter response text:", response.text)
@@ -71,46 +69,6 @@ def ask_openrouter(question, history=[]):
     except Exception as e:
         print("[ERROR] OpenRouter call failed:", e)
         return "⚠️ Ошибка ИИ. Попробуй позже."
-
-# === SEND TELEGRAM ===
-def send_telegram_message(chat_id, text):
-    try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        payload = {"chat_id": chat_id, "text": text}
-        response = requests.post(url, json=payload)
-        print("[SEND TG]", response.status_code, response.text)
-    except Exception:
-        print("[ERROR] Telegram message failed:")
-        traceback.print_exc()
-
-# === TELEGRAM WEBHOOK ===
-@app.route("/webhook", methods=["POST"])
-def telegram_webhook():
-    try:
-        data = request.get_json(force=True)
-        print("[TG WEBHOOK]", data)
-
-        message = data.get("message", {})
-        text = message.get("text")
-        sender_id = message.get("chat", {}).get("id")
-
-        if not text or not sender_id:
-            print("[SKIP] Empty Telegram message.")
-            return jsonify({"status": "no-message"}), 200
-
-        history = conversation_memory.get(sender_id, [])[-6:]  # до 3 пар (вопрос+ответ)
-        reply = ask_openrouter(text, history)
-
-        history.append({"role": "user", "content": text})
-        history.append({"role": "assistant", "content": reply})
-        conversation_memory[sender_id] = history
-
-        send_telegram_message(sender_id, reply)
-        return jsonify({"status": "ok"}), 200
-
-    except Exception:
-        traceback.print_exc()
-        return jsonify({"status": "fail"}), 500
 
 # === HEALTHCHECK ===
 @app.route("/", methods=["GET"])
