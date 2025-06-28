@@ -41,7 +41,8 @@ def ask_openrouter(question, history=[]):
             "model": "meta-llama/llama-3-70b-instruct",
             "messages": messages
         }
-        response = requests.post("https://openrouter.ai/v1/chat/completions", headers=headers, json=payload)
+        response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
+        print("[DEBUG] OpenRouter response text:", response.text)  # отладка
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
     except Exception as e:
