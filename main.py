@@ -15,7 +15,7 @@ SYSTEM_PROMPT_PATH = os.environ.get("SYSTEM_PROMPT_PATH", "system_prompt.txt")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-flash-1.5")
 
 # ✅ Прямо в коде зашит ключ (для стабильности на проде)
-OPENROUTER_API_KEY = "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"
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 
 with open(SYSTEM_PROMPT_PATH, "r", encoding="utf-8") as f:
     SYSTEM_PROMPT = f.read()
