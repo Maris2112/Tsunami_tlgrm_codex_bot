@@ -38,7 +38,7 @@ def ask_openrouter(question, history=[]):
             {"role": "user", "content": full_question},
         ]
         payload = {
-            "model": "meta-llama/llama-3-70b-instruct",
+            "model": "google/gemini-flash-1.5",
             "messages": messages
         }
         response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
