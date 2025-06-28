@@ -39,7 +39,6 @@ def ask_openrouter(question, history=[]):
             "X-Title": "Tsunami Telegram Bot"  # ✅ отображение на openrouter.ai
         }
 
-        # 🔍 Печать заголовков перед запросом
         print("[DEBUG] Headers sent to OpenRouter:", headers)
 
         messages = [
@@ -57,10 +56,9 @@ def ask_openrouter(question, history=[]):
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers=headers,
-            data=json.dumps(payload)  # ⚠️ важно: data=, не json=
+            data=json.dumps(payload)  # ⚠️ Важно! Используем data=
         )
 
-        # 🔍 Печать текста ответа
         print("[DEBUG] OpenRouter response text:", response.text)
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
@@ -69,7 +67,6 @@ def ask_openrouter(question, history=[]):
         print("[ERROR] OpenRouter call failed:", e)
         traceback.print_exc()
         return "⚠️ Ошибка ИИ. Попробуй позже."
-
 
 # === SEND TELEGRAM ===
 def send_telegram_message(chat_id, text):
@@ -118,5 +115,3 @@ def root():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-
-
