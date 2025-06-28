@@ -51,13 +51,22 @@ def ask_openrouter(question, history=[]):
             "model": OPENROUTER_MODEL,
             "messages": messages
         }
-        response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
+
+        import json  # Добавим import, если не был подключён ранее
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            data=json.dumps(payload)  # Ключевая правка
+        )
+
         print("[DEBUG] OpenRouter response text:", response.text)  # отладка
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
+
     except Exception as e:
         print("[ERROR] OpenRouter call failed:", e)
         return "⚠️ Ошибка ИИ. Попробуй позже."
+
 
 # === SEND TELEGRAM ===
 def send_telegram_message(chat_id, text):
