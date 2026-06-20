@@ -241,7 +241,7 @@ def handle_redeem(user_id, code):
 
 
 # ===================== Daily report (23:00 Almaty) =====================
-def send_daily_report(day):
+def build_report(day):
     day_start_utc = datetime.now(ALMATY).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.UTC)
     d = db.report_data(day, day_start_utc)
     lines = [f"📊 <b>Отчёт Tsunami за {day.strftime('%d.%m.%Y')}</b>", "",
@@ -251,7 +251,15 @@ def send_daily_report(day):
         lines.append(f"   • {plabel}: {cnt}")
     lines.append(f"✅ Призов погашено: <b>{d['redeemed']}</b>")
     lines.append(f"🛏 Новых контактов/броней: <b>{d['contacts']}</b>")
-    send_message(ADMIN_REPORT_CHAT, "\n".join(lines), html=True)
+    return "\n".join(lines)
+
+
+def is_report_viewer(chat_id):
+    return (ADMIN_REPORT_CHAT and str(chat_id) == str(ADMIN_REPORT_CHAT)) or staff_role(chat_id) is not None
+
+
+def send_daily_report(day):
+    send_message(ADMIN_REPORT_CHAT, build_report(day), html=True)
 
 
 def report_loop():
@@ -409,6 +417,13 @@ def telegram_webhook():
 
         if low == "/myid":
             send_message(sender_id, f"🆔 Ваш Telegram ID: <code>{sender_id}</code>", html=True)
+            return jsonify({"status": "ok"}), 200
+
+        if low.startswith("/report") or low in ("отчет", "отчёт", "report"):
+            if is_report_viewer(sender_id):
+                send_message(sender_id, build_report(datetime.now(ALMATY).date()), html=True)
+            else:
+                send_message(sender_id, "🔒 Отчёт доступен только администратору и персоналу.")
             return jsonify({"status": "ok"}), 200
 
         if low in MENU_WORDS:
