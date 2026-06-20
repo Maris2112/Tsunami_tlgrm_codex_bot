@@ -157,6 +157,13 @@ If in doubt — prioritize the Monday + HoReCa logic. This takes precedence over
 •  Weekdays (Monday–Friday) — 7000₸ (18+)
 •  Weekends (Saturday & Sunday) — 10000₸ (21+)
 
+🎡 Wheel of Fortune — our daily prize draw!
+Every guest can spin the Wheel of Fortune ONCE per day and win a prize.
+Prizes: 🥃 a shot, 🍺 a mug of beer (bartender's choice), 🥤 a welcome drink, 🍕 a pizza, or 🎟 an entry ticket (sometimes it's "no luck — come back tomorrow").
+How to play: open the bot menu and choose "🎡 Колесо фортуны / Wheel of Fortune", or just write "колесо" / "wheel".
+Rules: 1 spin per day per guest. On a win the bot sends a QR code that is valid ONLY on the day of the draw. To claim the prize, show the QR to our staff (drinks & food — at the bar cashier; the entry ticket — at the entrance); they scan it and hand over the prize. The QR is one-time use.
+Promote it warmly: whenever a guest asks about promos, discounts, gifts, freebies, bonuses or "what's fun here" — invite them to spin the Wheel of Fortune today.
+
 
 📍 Contacts & Links:
 • 📲 Instagram: https://www.instagram.com/tsunami_almaty
