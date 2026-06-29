@@ -49,7 +49,6 @@ ALMATY = pytz.timezone("Asia/Almaty")
 
 conversation_memory = {}
 processed_messages = set()
-booking_state = {}        # chat_id -> {"step": str, "data": {...}}
 user_lang = {}            # chat_id -> 'ru'/'kk'/'en'
 
 CANCEL_WORDS = ("отмена", "/cancel", "стоп", "cancel", "болдырмау", "тоқта")
@@ -165,7 +164,6 @@ def main_menu_kb(lang):
          {"text": T(lang, "b_loc"), "callback_data": "location"}],
         [{"text": T(lang, "b_book"), "callback_data": "booking"},
          {"text": T(lang, "b_events"), "callback_data": "events"}],
-        [{"text": T(lang, "b_wheel"), "callback_data": "spin"}],
         [{"text": T(lang, "b_admin"), "url": f"https://wa.me/{ADMIN_PHONE}"},
          {"text": T(lang, "b_inst"), "url": INSTAGRAM_URL}],
     ]}
@@ -184,60 +182,6 @@ def greeting(lang):
 def send_main_menu(chat_id):
     lang = L(chat_id)
     send_message(chat_id, f"{greeting(lang)}\n\n{i18n.t(lang, 'welcome')}", main_menu_kb(lang), html=True)
-
-
-# ===================== Wheel of fortune =====================
-def do_spin(chat_id):
-    lang = L(chat_id)
-    if not db.can_spin_today(chat_id):
-        send_message(chat_id, i18n.t(lang, "w_already"), menu_hint_kb(lang))
-        return
-    idx = random.choices(range(len(i18n.PRIZES)), weights=[p["w"] for p in i18n.PRIZES], k=1)[0]
-    p = i18n.PRIZES[idx]
-    db.record_spin(chat_id, p["key"])
-    label = p.get(lang) or p["ru"]
-    if not p["real"]:
-        send_message(chat_id, i18n.t(lang, "w_lose", prize=label), menu_hint_kb(lang), html=True)
-        return
-    # real prize -> unique code + QR (valid only today, redeemed by the right staff role)
-    code = gen_code()
-    today = datetime.now(ALMATY).date()
-    db.create_prize(code, chat_id, p["key"], p["ru"], p["role"], today)
-    deeplink = f"https://t.me/{BOT_USERNAME}?start=rdm_{code}"
-    qr = ("https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=12&data="
-          + urllib.parse.quote(deeplink, safe=""))
-    who = i18n.t(lang, "redeem_cashier" if p["role"] == "cashier" else "redeem_entrance")
-    caption = i18n.t(lang, "w_win_qr", prize=label, who=who, code=code)
-    send_photo(chat_id, qr, caption=caption, reply_markup=menu_hint_kb(lang))
-
-
-# ===================== Prize redemption (staff) =====================
-def handle_redeem(user_id, code):
-    code = code.strip().upper()
-    role = staff_role(user_id)
-    if not role:
-        send_message(user_id, "🔒 Гасить призы может только сотрудник (вход или кассир).")
-        return
-    pr = db.get_prize(code)
-    if not pr:
-        send_message(user_id, f"❌ Код <b>{code}</b> не найден.", html=True)
-        return
-    if pr["status"] == "redeemed":
-        send_message(user_id, f"❌ Код <b>{code}</b> уже погашен ({pr['prize_label']}).", html=True)
-        return
-    today = datetime.now(ALMATY).date()
-    if pr["valid_date"] != today:
-        send_message(user_id, f"❌ Код <b>{code}</b> просрочен (действует только в день розыгрыша).", html=True)
-        return
-    if pr["role"] != role:
-        target = "кассиру" if pr["role"] == "cashier" else "на вход"
-        send_message(user_id, f"↪️ Этот приз ({pr['prize_label']}) гасит {target}, не ты.", html=True)
-        return
-    label = db.redeem_prize(code, user_id, today)
-    if label:
-        send_message(user_id, f"✅ Погашено: <b>{label}</b>\nВыдай гостю 👍", html=True)
-    else:
-        send_message(user_id, f"❌ Код <b>{code}</b> уже погашен.", html=True)
 
 
 # ===================== Daily report (23:00 Almaty) =====================
@@ -275,75 +219,6 @@ def report_loop():
         _time.sleep(300)
 
 
-# ===================== Booking wizard =====================
-def start_booking(chat_id):
-    lang = L(chat_id)
-    booking_state[chat_id] = {"step": "date", "data": {}}
-    today = datetime.now(ALMATY)
-    kb = {"inline_keyboard": [[
-        {"text": f"{i18n.t(lang, 'bk_today')} ({today.strftime('%d.%m')})", "callback_data": "bk_today"},
-        {"text": f"{i18n.t(lang, 'bk_tomorrow')} ({(today + timedelta(days=1)).strftime('%d.%m')})", "callback_data": "bk_tomorrow"},
-    ], [{"text": i18n.t(lang, "bk_cancel"), "callback_data": "bk_cancel"}]]}
-    send_message(chat_id, i18n.t(lang, "bk1"), kb, html=True)
-
-
-def booking_ask_zone(chat_id):
-    lang = L(chat_id)
-    booking_state[chat_id]["step"] = "zone"
-    kb = {"inline_keyboard": [
-        [{"text": i18n.t(lang, "z_std"), "callback_data": "bk_std"}],
-        [{"text": i18n.t(lang, "z_vip1"), "callback_data": "bk_vip1"},
-         {"text": i18n.t(lang, "z_vip2"), "callback_data": "bk_vip2"}],
-        [{"text": i18n.t(lang, "bk_cancel"), "callback_data": "bk_cancel"}],
-    ]}
-    send_message(chat_id, i18n.t(lang, "bk2"), kb, html=True)
-
-
-def booking_finish(chat_id):
-    lang = L(chat_id)
-    T = i18n.t
-    d = booking_state[chat_id]["data"]
-    summary = (f"{T(lang,'sum_date')}: {d.get('date','—')}\n"
-               f"{T(lang,'sum_zone')}: {d.get('zone','—')}\n"
-               f"{T(lang,'sum_people')}: {d.get('people','—')}\n"
-               f"{T(lang,'sum_name')}: {d.get('name','—')}\n"
-               f"{T(lang,'sum_phone')}: {d.get('phone','—')}")
-    wa_text = urllib.parse.quote(f"{T(lang,'wa_hi')}\n{summary}")
-    kb = {"inline_keyboard": [
-        [{"text": T(lang, "bk_send"), "url": f"https://wa.me/{ADMIN_PHONE}?text={wa_text}"}],
-        [{"text": T(lang, "b_menu"), "callback_data": "menu"}],
-    ]}
-    send_message(chat_id, T(lang, "bk_done", summary=summary), kb, html=True)
-    db.save_contact(chat_id, d.get("name"), d.get("phone"), source="booking",
-                    extra=f"date={d.get('date')}; zone={d.get('zone')}; people={d.get('people')}")
-    if ADMIN_CHAT_ID:
-        send_message(ADMIN_CHAT_ID, "🆕 <b>Новая бронь из бота:</b>\n" + summary, html=True)
-    booking_state.pop(chat_id, None)
-
-
-def handle_booking_text(chat_id, text):
-    lang = L(chat_id)
-    if text.strip().lower() in CANCEL_WORDS:
-        booking_state.pop(chat_id, None)
-        send_message(chat_id, i18n.t(lang, "bk_cancelled"), menu_hint_kb(lang))
-        return
-    st = booking_state[chat_id]
-    step = st["step"]
-    if step == "date":
-        st["data"]["date"] = text.strip(); booking_ask_zone(chat_id)
-    elif step == "zone":
-        st["data"]["zone"] = text.strip(); st["step"] = "people"
-        send_message(chat_id, i18n.t(lang, "bk3"), html=True)
-    elif step == "people":
-        st["data"]["people"] = text.strip(); st["step"] = "name"
-        send_message(chat_id, i18n.t(lang, "bk4"), html=True)
-    elif step == "name":
-        st["data"]["name"] = text.strip(); st["step"] = "phone"
-        send_message(chat_id, i18n.t(lang, "bk5"), html=True)
-    elif step == "phone":
-        st["data"]["phone"] = text.strip(); booking_finish(chat_id)
-
-
 def handle_callback(cq):
     chat_id = cq.get("message", {}).get("chat", {}).get("id")
     update_lang(chat_id, cq.get("from"))
@@ -352,21 +227,7 @@ def handle_callback(cq):
     tg("answerCallbackQuery", {"callback_query_id": cq.get("id")})
 
     if data == "booking":
-        start_booking(chat_id); return
-    if data == "bk_cancel":
-        booking_state.pop(chat_id, None)
-        send_message(chat_id, i18n.t(lang, "bk_cancelled"), menu_hint_kb(lang)); return
-    if data in ("bk_today", "bk_tomorrow") and chat_id in booking_state:
-        today = datetime.now(ALMATY)
-        day = today if data == "bk_today" else today + timedelta(days=1)
-        booking_state[chat_id]["data"]["date"] = day.strftime("%d.%m.%Y")
-        booking_ask_zone(chat_id); return
-    if data in ("bk_std", "bk_vip1", "bk_vip2") and chat_id in booking_state:
-        booking_state[chat_id]["data"]["zone"] = {"bk_std": "Standard", "bk_vip1": "VIP 1", "bk_vip2": "VIP 2"}[data]
-        booking_state[chat_id]["step"] = "people"
-        send_message(chat_id, i18n.t(lang, "bk3"), html=True); return
-    if data == "spin":
-        do_spin(chat_id); return
+        send_message(chat_id, i18n.t(lang, "book_call"), menu_hint_kb(lang), html=True); return
     if data == "menu":
         send_main_menu(chat_id); return
     if data == "location":
@@ -401,20 +262,6 @@ def telegram_webhook():
         update_lang(sender_id, message.get("from"), text)
         low = text.strip().lower()
 
-        # prize redemption — QR deep-link ("/start rdm_CODE") or typed ("/redeem CODE")
-        if low.startswith("/start ") and "rdm_" in text:
-            param = text.split(maxsplit=1)[1]
-            if param.startswith("rdm_"):
-                handle_redeem(sender_id, param[4:])
-                return jsonify({"status": "ok"}), 200
-        if low.startswith("/redeem"):
-            parts = text.split(maxsplit=1)
-            if len(parts) > 1:
-                handle_redeem(sender_id, parts[1])
-            else:
-                send_message(sender_id, "Использование: /redeem КОД")
-            return jsonify({"status": "ok"}), 200
-
         if low == "/myid":
             send_message(sender_id, f"🆔 Ваш Telegram ID: <code>{sender_id}</code>", html=True)
             return jsonify({"status": "ok"}), 200
@@ -427,12 +274,7 @@ def telegram_webhook():
             return jsonify({"status": "ok"}), 200
 
         if low in MENU_WORDS:
-            booking_state.pop(sender_id, None)
             send_main_menu(sender_id)
-            return jsonify({"status": "ok"}), 200
-
-        if sender_id in booking_state:
-            handle_booking_text(sender_id, text)
             return jsonify({"status": "ok"}), 200
 
         history = conversation_memory.get(sender_id, [])[-6:]
